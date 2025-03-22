@@ -1,9 +1,32 @@
 // 这是一个简单的客户端示例，展示如何连接到 WebSocket 服务器
-import { io } from 'socket.io-client';
+import { createSocketAdapter } from '../src/socket';
 import { SocketEvents } from '../src/types';
 
-// 替换为你的服务器地址
-const SERVER_URL = 'http://localhost:3000';
+// 服务器地址
+const SERVER_URL = 'ws://localhost:6000';
+
+// 创建客户端代码
+export function createClient(url: string, type: 'socketio' | 'websocket') {
+    const socket = createSocketAdapter(type);
+
+    // 连接
+    socket.connect(url);
+
+    // 设置事件监听
+    socket.on('message', (data) => {
+        console.log('Received message:', data);
+    });
+
+    // 返回客户端接口
+    return {
+        send: (data: any) => {
+            socket.emit('message', data);
+        },
+        disconnect: () => {
+            socket.disconnect();
+        }
+    };
+}
 
 // 创建一个客户端类
 class ChatClient {
@@ -14,27 +37,48 @@ class ChatClient {
 
     constructor(username: string) {
         this.username = username;
+        console.log(`创建客户端实例，用户名: ${username}, 服务器地址: ${SERVER_URL}`);
 
-        // 初始化连接
-        this.socket = io(SERVER_URL, {
-            auth: {
-                username: this.username
-            }
-        });
+        // 初始化连接，使用合法的调试配置选项
+        this.socket = createSocketAdapter('websocket');
 
-        // 注册事件监听器
+        // 注册基本事件监听器
         this.registerEventListeners();
+        // 注册详细的调试监听器
+        this.registerDebugListeners();
     }
 
     private registerEventListeners() {
         // 连接事件
         this.socket.on('connect', () => {
             console.log(`已连接到服务器，你好 ${this.username}!`);
+            console.log(`Socket ID: ${this.socket.id}`);
+            console.log(`当前传输方式: ${this.socket.io.engine.transport.name}`);
+
+            // 记录连接头信息
+            const headers = this.socket.io.engine.transport.extraHeaders || {};
+            console.log('连接头信息:', JSON.stringify(headers, null, 2));
+
+            // 尝试获取并打印底层 WebSocket 对象的信息
+            if (this.socket.io.engine.transport.name === 'websocket') {
+                const ws = this.socket.io.engine.transport.ws;
+                if (ws) {
+                    console.log('WebSocket 状态:', ws.readyState);
+                    console.log('WebSocket URL:', ws.url);
+                }
+            }
         });
 
         // 连接错误
         this.socket.on('connect_error', (error: any) => {
             console.error('连接错误:', error.message);
+            // 尝试提取更多错误信息
+            if (error.description) {
+                console.error('错误详情:', error.description);
+            }
+            if (error.context) {
+                console.error('错误上下文:', error.context);
+            }
         });
 
         // 用户列表
@@ -113,6 +157,69 @@ class ChatClient {
         this.socket.on('disconnect', () => {
             console.log('与服务器断开连接');
         });
+    }
+
+    private registerDebugListeners() {
+        // 记录所有发送的数据包
+        if (this.socket.io && this.socket.io.engine) {
+            // 监听引擎级别的数据包
+            this.socket.io.engine.on('packetCreate', (packet: any) => {
+                console.log('发送数据包:', JSON.stringify(packet, null, 2));
+            });
+
+            // 监听传输级别的请求
+            this.socket.io.engine.transport.on('request', (req: any) => {
+                console.log('HTTP请求:', {
+                    method: req.method,
+                    url: req.url,
+                    headers: req.headers
+                });
+            });
+
+            // 监听 WebSocket 特定事件（如果可用）
+            if (this.socket.io.engine.transport.name === 'websocket') {
+                const ws = this.socket.io.engine.transport.ws;
+                if (ws) {
+                    // 使用定时器监控 WebSocket 状态
+                    const wsMonitor = setInterval(() => {
+                        console.log('WebSocket 当前状态:', ws.readyState);
+                        if (!this.socket.connected) {
+                            clearInterval(wsMonitor);
+                        }
+                    }, 5000);
+
+                    // 原始 WebSocket 消息
+                    const originalSend = ws.send;
+                    ws.send = (data: any) => {
+                        console.log('WebSocket 发送原始数据:', {
+                            type: typeof data,
+                            length: data.length || 0,
+                            // 仅显示前100个字符，避免日志过大
+                            preview: typeof data === 'string' ? data.substring(0, 100) : '[非文本数据]'
+                        });
+                        return originalSend.call(ws, data);
+                    };
+                }
+            }
+
+            // 监听传输升级
+            this.socket.io.engine.on('upgrade', (transport: any) => {
+                console.log(`连接已升级到: ${transport.name}`);
+                console.log('升级后的请求头:', this.socket.io.engine.transport.extraHeaders || {});
+            });
+        }
+
+        // 监听所有事件
+        this.socket.onAny((event: string, ...args: any[]) => {
+            console.log(`收到事件: ${event}`, JSON.stringify(args, replacer, 2));
+        });
+
+        // 监听所有发出的事件
+        const originalEmit = this.socket.emit;
+        this.socket.emit = (event: string, ...args: any[]) => {
+            console.log(`发送事件: ${event}`, JSON.stringify(args, replacer, 2));
+            return originalEmit.apply(this.socket, [event, ...args]);
+        };
     }
 
     // 发送私人消息
@@ -210,47 +317,60 @@ class ChatClient {
     }
 }
 
+// 用于处理循环引用的JSON替换函数
+function replacer(key: string, value: any) {
+    if (value === undefined) {
+        return '[undefined]';
+    }
+    if (value === null) {
+        return null;
+    }
+    if (typeof value === 'function') {
+        return '[function]';
+    }
+    if (typeof value === 'object' && value !== null) {
+        if (value instanceof Error) {
+            return {
+                error: value.name,
+                message: value.message,
+                stack: value.stack
+            };
+        }
+        // 避免循环引用
+        const seen = new Set();
+        return Object.fromEntries(
+            Object.entries(value).filter(([k, v]) => {
+                if (seen.has(v)) return false;
+                if (typeof v === 'object' && v !== null) seen.add(v);
+                return true;
+            })
+        );
+    }
+    return value;
+}
+
 // 演示使用方法
 async function demo() {
-    // 创建两个客户端实例
+    console.log('启动WebSocket客户端演示，详细日志模式...');
+    console.log('服务器地址:', SERVER_URL);
+
+    // 创建客户端实例
     const alice = new ChatClient('Alice');
 
     // 等待一些时间确保连接建立
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    await new Promise(resolve => setTimeout(resolve, 2000));
 
     // 创建另一个客户端
     const bob = new ChatClient('Bob');
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    await new Promise(resolve => setTimeout(resolve, 2000));
 
     // Alice 创建一个房间
+    console.log('--- Alice创建房间测试 ---');
     alice.createRoom('Alice的房间', '这是一个测试房间');
-    await new Promise(resolve => setTimeout(resolve, 500));
+    await new Promise(resolve => setTimeout(resolve, 2000));
 
-    // 等待 Bob 收到房间列表后加入房间
-    setTimeout(() => {
-        const rooms = bob.getAvailableRooms();
-        if (rooms.length > 0) {
-            bob.joinRoom(rooms[0].id);
-
-            // Bob 发送一个房间消息
-            setTimeout(() => {
-                bob.sendRoomMessage(rooms[0].id, '大家好，这是Bob!');
-            }, 500);
-        }
-    }, 1500);
-
-    // Alice 发送一个私人消息给 Bob
-    setTimeout(() => {
-        const users = alice.getOnlineUsers();
-        if (users.length > 0) {
-            const bobUser = users.find(u => u.username === 'Bob');
-            if (bobUser) {
-                alice.sendPrivateMessage(bobUser.id, '你好，Bob!');
-            }
-        }
-    }, 3000);
-
-    // 几秒钟后断开连接
+    // 等待演示结束
+    console.log('演示将在10秒后结束...');
     setTimeout(() => {
         console.log('演示结束，正在断开连接...');
         alice.disconnect();
@@ -260,7 +380,7 @@ async function demo() {
 
 // 如果直接运行此文件，执行演示
 if (require.main === module) {
-    console.log('启动WebSocket客户端演示...');
+    console.log('启动WebSocket客户端详细日志演示...');
     demo().catch(console.error);
 }
 
