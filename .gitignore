@@ -1,0 +1,51 @@
+# 编译输出
+/dist
+/node_modules
+
+# 日志
+logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+
+# 操作系统
+.DS_Store
+
+# 测试
+/coverage
+/.nyc_output
+
+# IDEs and editors
+/.idea
+.project
+.classpath
+.c9/
+*.launch
+.settings/
+*.sublime-workspace
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+# 环境变量和敏感信息
+.env
+.env.*
+!.env.example
+!.env.test
+
+# 临时文件
+/tmp
+/temp
+
+# 数据库相关
+/database/data
+/pgdata
+
+# 其他
+.docker-*
+.npmrc 
