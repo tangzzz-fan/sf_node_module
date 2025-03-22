@@ -1,32 +1,9 @@
 // 这是一个简单的客户端示例，展示如何连接到 WebSocket 服务器
-import { createSocketAdapter } from '../src/socket';
+import { io } from 'socket.io-client';
 import { SocketEvents } from '../src/types';
 
 // 服务器地址
 const SERVER_URL = 'ws://localhost:6000';
-
-// 创建客户端代码
-export function createClient(url: string, type: 'socketio' | 'websocket') {
-    const socket = createSocketAdapter(type);
-
-    // 连接
-    socket.connect(url);
-
-    // 设置事件监听
-    socket.on('message', (data) => {
-        console.log('Received message:', data);
-    });
-
-    // 返回客户端接口
-    return {
-        send: (data: any) => {
-            socket.emit('message', data);
-        },
-        disconnect: () => {
-            socket.disconnect();
-        }
-    };
-}
 
 // 创建一个客户端类
 class ChatClient {
@@ -40,7 +17,22 @@ class ChatClient {
         console.log(`创建客户端实例，用户名: ${username}, 服务器地址: ${SERVER_URL}`);
 
         // 初始化连接，使用合法的调试配置选项
-        this.socket = createSocketAdapter('websocket');
+        this.socket = io(SERVER_URL, {
+            auth: {
+                username: this.username
+            },
+            // 使用合法的调试相关选项
+            forceNew: true,           // 强制创建新连接
+            reconnection: true,       // 启用重连
+            reconnectionAttempts: 5,  // 最大重连次数
+            reconnectionDelay: 1000,  // 重连延迟(ms)
+            timeout: 20000,           // 连接超时时间(ms)
+
+            // 自定义连接选项
+            extraHeaders: {
+                'X-Client-Info': `ChatClient-${username}-${Date.now()}`
+            }
+        });
 
         // 注册基本事件监听器
         this.registerEventListeners();
