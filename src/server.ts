@@ -1,4 +1,4 @@
-import express, { Application } from 'express';
+import express, { Application, Router } from 'express';
 import http from 'http';
 import { Server as SocketIOServer } from 'socket.io';
 import cors from 'cors';
@@ -10,6 +10,9 @@ import { SocketController } from './controllers/SocketController';
 import { errorMiddleware } from './middleware/errorMiddleware';
 import { registerSocketHandlers } from './socket';
 import { logger } from './utils/logger';
+import { AuthService } from './auth';
+import { authenticateSocket } from './auth';
+import { registerAuthRoutes } from './routes/auth.routes';
 
 export async function createServer() {
     const app: Application = express();
@@ -34,15 +37,25 @@ export async function createServer() {
         }
     });
 
-    // 初始化服务
+    // 初始化服务 - 创建单一实例以在HTTP和Socket.IO之间共享
+    const authService = new AuthService();
     const userService = new UserService();
     const messageService = new MessageService();
+
+    // 添加Socket.IO认证中间件 - 使用同一个authService实例
+    io.use(authenticateSocket(authService));
 
     // 初始化 Socket 控制器
     const socketController = new SocketController(io, userService, messageService);
 
     // 注册 Socket 处理程序
     registerSocketHandlers(io, socketController);
+
+    // 注册认证路由 - 使用同一个authService实例
+    const apiRouter = Router();
+    registerAuthRoutes(apiRouter, authService);
+
+    app.use('/api', apiRouter);
 
     // 基本路由
     app.get('/', (req, res) => {
@@ -65,4 +78,4 @@ export async function createServer() {
     });
 
     return { app, httpServer, io };
-} 
+}

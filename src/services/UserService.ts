@@ -12,7 +12,7 @@ export class UserService {
      * @returns 添加的用户对象
      */
     public addUser(user: User): User {
-        this.users.set(user.id, user);
+        this.users.set(user.userId, user);
         return user;
     }
 

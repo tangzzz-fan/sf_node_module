@@ -21,13 +21,19 @@ signalHandlers['SIGINT'] = shutdown;
  */
 export async function init() {
     try {
-        // 创建服务器（这一步会被测试模拟）
-        const server = await createServer();
-        const port = config.port || 3000;
+        // 创建服务器实例
+        const { app, httpServer, io } = await createServer();
 
-        // 使用 httpServer 属性来访问 HTTP 服务器
-        server.httpServer.listen(port, () => {
-            logger.info(`服务器正在监听端口: ${port}`);
+        // 启动HTTP服务器（认证服务）
+        httpServer.listen(config.httpPort, () => {
+            logger.info(`HTTP认证服务器已启动，监听端口: ${config.httpPort}`);
+        });
+
+        // 启动Socket.IO服务器
+        const socketServer = require('http').createServer();
+        io.attach(socketServer);
+        socketServer.listen(config.socketPort, () => {
+            logger.info(`Socket.IO服务器已启动，监听端口: ${config.socketPort}`);
         });
 
         // 注册更详细的关闭处理函数，替换模块级别的简单版本
@@ -35,9 +41,9 @@ export async function init() {
             logger.info('正在关闭服务器...');
 
             // 先关闭 Socket.IO 服务器
-            server.io.close(() => {
+            io.close(() => {
                 // 然后关闭 HTTP 服务器
-                server.httpServer.close(() => {
+                httpServer.close(() => {
                     logger.info('服务器已关闭');
                     process.exit(0);
                 });
@@ -58,7 +64,7 @@ export async function init() {
         process.on('SIGTERM', signalHandlers['SIGTERM']);
         process.on('SIGINT', signalHandlers['SIGINT']);
 
-        return server;
+        return { app, httpServer, io };
     } catch (error) {
         logger.error('启动服务器时发生错误:', error);
         process.exit(1);

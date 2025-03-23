@@ -1,7 +1,7 @@
 import { Socket } from 'socket.io';
 
 export interface User {
-    id: string;
+    userId: string;
     username: string;
     socketId: string;
     connected: boolean;
@@ -34,8 +34,9 @@ export interface AuthenticatedSocket extends Socket {
 }
 
 export interface PrivateMessagePayload {
-    to: string;
+    recipientId: string;
     content: string;
+    timestamp?: number;
 }
 
 export interface RoomMessagePayload {
@@ -57,6 +58,7 @@ export interface CreateRoomPayload {
 export enum SocketEvents {
     CONNECT = 'connect',
     DISCONNECT = 'disconnect',
+    ERROR = 'error',
     USER_JOINED = 'user:joined',
     USER_LEFT = 'user:left',
     USERS_LIST = 'users:list',
@@ -66,9 +68,10 @@ export enum SocketEvents {
     MESSAGE_ROOM = 'message:room',
     MESSAGE_SENT = 'message:sent',
     MESSAGE_READ = 'message:read',
+    MESSAGE_RECEIVED = 'message:received',
     ROOM_CREATED = 'room:created',
     ROOM_JOINED = 'room:join',
     ROOM_LEFT = 'room:leave',
     ROOM_LIST = 'room:list',
-    ERROR = 'error'
+    STSTEM_MESSAGE = 'system:message'
 } 

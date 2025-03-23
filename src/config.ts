@@ -11,6 +11,8 @@ interface Config {
     corsOrigins: string[];
     jwtSecret: string;
     jwtExpiresIn: string;
+    httpPort: number;
+    socketPort: number;
 }
 
 export const config: Config = {
@@ -19,5 +21,7 @@ export const config: Config = {
     logLevel: process.env.LOG_LEVEL || 'info',
     corsOrigins: process.env.CORS_ORIGINS ? process.env.CORS_ORIGINS.split(',') : ['*'],
     jwtSecret: process.env.JWT_SECRET || 'default-secret-key-change-in-production',
-    jwtExpiresIn: process.env.JWT_EXPIRES_IN || '24h'
+    jwtExpiresIn: process.env.JWT_EXPIRES_IN || '24h',
+    httpPort: 3000,
+    socketPort: 6000
 }; 
